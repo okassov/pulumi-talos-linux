@@ -1,0 +1,39 @@
+{
+  "name": "@okassov/pulumi-talos-linux",
+  "version": "${VERSION}",
+  "description": "Talos Linux for Pulumi",
+  "author": "Okassov Marat <okassov.marat@gmail.com>",
+  "license": "MPL-2.0",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/okassov/pulumi-talos-linux.git"
+  },
+  "homepage": "https://github.com/okassov/pulumi-talos-linux",
+  "keywords": [
+    "pulumi",
+    "talos",
+    "kubernetes"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc",
+    "prepare": "npm run build",
+    "test": "echo \"No tests specified\" && exit 0" 
+  },
+  "devDependencies": {
+    "@types/node": "^14",
+    "typescript": "^4.0.0"
+  },
+  "dependencies": {
+    "@pulumi/pulumi": "^3.0.0",
+    "@pulumiverse/talos": "^0.4.0"
+  }
+}

@@ -1,7 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as talos from "@pulumiverse/talos";
 
-
 export interface ConfigTalosArgs {}
 
 export interface SharedTalosArgs {
@@ -45,37 +44,10 @@ export class Talos extends pulumi.ComponentResource {
 
         this.secrets = new talos.machine.Secrets(`secrets`, {}, { parent: this });
 
-        // this.clientConfiguration = this.secrets.clientConfiguration.caCertificate.apply(caCert => {
-        //     return this.secrets.clientConfiguration.clientCertificate.apply(clientCert => {
-        //         return this.secrets.clientConfiguration.clientKey.apply(clientKey => {
-        //             return talos.client.getConfiguration({
-        //                 clusterName: args.sharedConfig.clusterName,
-        //                 clientConfiguration: {
-        //                     caCertificate: caCert,
-        //                     clientCertificate: clientCert,
-        //                     clientKey: clientKey,
-        //                 },
-        //                 endpoints: args.master.nodes,
-        //             }, { parent: this });
-        //         });
-        //     });
-        // });
-
-        this.clientConfiguration = pulumi.all([
-            this.secrets.clientConfiguration.caCertificate,
-            this.secrets.clientConfiguration.clientCertificate,
-            this.secrets.clientConfiguration.clientKey,
-            args.master.nodes
-        ]).apply(([caCert, clientCert, clientKey, nodes]) => {
-            return talos.client.getConfiguration({
-                clusterName: args.sharedConfig.clusterName,
-                clientConfiguration: {
-                    caCertificate: caCert,
-                    clientCertificate: clientCert,
-                    clientKey: clientKey,
-                },
-                endpoints: nodes,
-            }, { parent: this });
+        this.clientConfiguration = talos.client.getConfigurationOutput({
+            clusterName: args.sharedConfig.clusterName,
+            clientConfiguration: this.secrets.clientConfiguration,
+            endpoints: args.master.nodes
         });
 
         this.masterNodes = args.master.nodes

@@ -56,6 +56,7 @@ export class Talos extends pulumi.ComponentResource {
             {
                 ...args.sharedConfig, 
                 ...args.master.config, 
+                configPatches: args.master.config.baseTemplate,
                 machineSecrets: this.secrets.machineSecrets,
                 machineType: "controlplane",
                 docs: false,
@@ -70,7 +71,7 @@ export class Talos extends pulumi.ComponentResource {
                 clientConfiguration: this.secrets.clientConfiguration,
                 machineConfigurationInput: masterConfig.machineConfiguration,
                 node: node,
-                configPatches: args.master.config.configPatches
+                configPatches: args.master.config.patches
             }, { parent: this });
             this.masterConfigurationApplyResources.push(masterConfigApply);
         });
@@ -80,6 +81,7 @@ export class Talos extends pulumi.ComponentResource {
                 {
                     ...args.sharedConfig, 
                     ...args.master.config,
+                    configPatches: args.worker.config.baseTemplate,
                     machineSecrets: this.secrets.machineSecrets,
                     machineType: "worker",
                     docs: false,
@@ -93,7 +95,7 @@ export class Talos extends pulumi.ComponentResource {
                     clientConfiguration: this.secrets.clientConfiguration,
                     machineConfigurationInput: workerConfig.machineConfiguration,
                     node: node,
-                    configPatches: args.master.config.configPatches
+                    configPatches: args.master.config.patches
                 }, { parent: this })
                 this.workerConfigurationApplyResources.push(workerConfigApply);
             });

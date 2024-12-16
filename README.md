@@ -202,8 +202,8 @@ const talosCluster = new talos.Talos(`${resourceName}-talosCluster`, {
     },
     worker: {
         config: {
-        talosVersion: "v1.7.4",
-        kubernetesVersion: "1.30.1",
+            talosVersion: "v1.7.4",
+            kubernetesVersion: "1.30.1",
             baseTemplate: [talosDefaultTemplate],
             patches: [containerdPatch]
         },

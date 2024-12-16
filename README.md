@@ -1,6 +1,6 @@
 # Talos Linux Module for Pulumi
 
-[![npm version](https://badge.fury.io/js/%40okassov%2Fpulumi-openstack-instance.svg)](https://badge.fury.io/js/%40okassov%2Fpulumi-openstack-instance)
+[![npm version](https://badge.fury.io/js/%40okassov%2Fpulumi-talos-linux.svg)](https://www.npmjs.com/package/%40okassov/pulumi-talos-linux)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://mozilla.org/MPL/2.0/)
 [![Pulumi Registry](https://img.shields.io/badge/Pulumi-Registry-blueviolet.svg)](https://www.pulumi.com/registry/packages/talos/)
 

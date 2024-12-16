@@ -6,6 +6,7 @@ export interface ConfigTalosArgs {}
 export interface SharedTalosArgs {
     clusterName: string;
     clusterEndpoint: string;
+    boostrapTimeout?: string;
 };
 
 export interface CustomGetConfigurationOutputArgs extends Omit<talos.machine.GetConfigurationOutputArgs, 'clusterName' | 'clusterEndpoint' | 'machineSecrets' | 'machineType'> {
@@ -65,15 +66,16 @@ export class Talos extends pulumi.ComponentResource {
             opts?.provider
         );
 
-        args.master.nodes.forEach((node, nodeCounter) => {
+        args.master.nodes.forEach((node) => {
 
-            const masterConfigApply = new talos.machine.ConfigurationApply(`configApplyMaster-${nodeCounter}`, {
+            const masterConfigApply = new talos.machine.ConfigurationApply(`configApplyMaster-${node}`, {
                 clientConfiguration: this.secrets.clientConfiguration,
                 machineConfigurationInput: masterConfig.machineConfiguration,
                 node: node,
                 configPatches: args.master.config.patches
             }, { parent: this });
             this.masterConfigurationApplyResources.push(masterConfigApply);
+
         });
 
         if (args.worker) {
@@ -90,12 +92,12 @@ export class Talos extends pulumi.ComponentResource {
                 opts?.provider
             );
 
-            args.worker.nodes.forEach((node, nodeCounter) => {
-                const workerConfigApply = new talos.machine.ConfigurationApply(`configApplyWorker-${nodeCounter}`, {
+            args.worker.nodes.forEach((node) => {
+                const workerConfigApply = new talos.machine.ConfigurationApply(`configApplyWorker-${node}`, {
                     clientConfiguration: this.secrets.clientConfiguration,
                     machineConfigurationInput: workerConfig.machineConfiguration,
                     node: node,
-                    configPatches: args.master.config.patches
+                    configPatches: args.worker?.config.patches
                 }, { parent: this })
                 this.workerConfigurationApplyResources.push(workerConfigApply);
             });
@@ -103,7 +105,11 @@ export class Talos extends pulumi.ComponentResource {
 
         new talos.machine.Bootstrap(`bootstrap`, {
             node: args.master.nodes[0],
+            endpoint: args.master.nodes[0],
             clientConfiguration: this.secrets.clientConfiguration,
+            timeouts: {
+                create: args.sharedConfig.boostrapTimeout
+            }
         }, { dependsOn: this.masterConfigurationApplyResources , parent: this });
 
     }

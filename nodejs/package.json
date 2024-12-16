@@ -34,6 +34,6 @@
   },
   "dependencies": {
     "@pulumi/pulumi": "^3.0.0",
-    "@pulumiverse/talos": "^0.4.0"
+    "@pulumiverse/talos": "0.4.1"
   }
 }

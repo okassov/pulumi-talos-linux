@@ -1,7 +1,18 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as talos from "@pulumiverse/talos";
 
+/**
+ * Version 0.2.0
+ *  - New type `PerNodePatches`.
+ *  - Added optional `perNodePatches` to Master/Worker args.
+ *  - `ConfigurationApply` now merges common patches with node‑specific ones.
+ */
+
 export interface ConfigTalosArgs {}
+
+/* ---------------------------------------------------------------- */
+/* Shared structures                                                */
+/* ---------------------------------------------------------------- */
 
 export interface SharedTalosArgs {
     clusterName: string;
@@ -9,19 +20,35 @@ export interface SharedTalosArgs {
     boostrapTimeout?: string;
 };
 
-export interface CustomGetConfigurationOutputArgs extends Omit<talos.machine.GetConfigurationOutputArgs, 'clusterName' | 'clusterEndpoint' | 'machineSecrets' | 'machineType'> {
+export interface CustomGetConfigurationOutputArgs 
+    extends Omit<
+        talos.machine.GetConfigurationOutputArgs, 
+        'clusterName' | 'clusterEndpoint' | 'machineSecrets' | 'machineType'
+    > {
     baseTemplate: string[];
     patches: string[];
 }
 
+/* ---------------------------------------------------------------- */
+/* map «node id → patches». Key is IP or hostname string.           */
+/* ---------------------------------------------------------------- */
+
+export type PerNodePatches = Record<string, string[]>;
+
+/* ---------------------------------------------------------------- */
+/* Master / Worker args                                             */
+/* ---------------------------------------------------------------- */
+
 export interface MasterTalosArgs {
     config: CustomGetConfigurationOutputArgs;
     nodes: pulumi.Input<string>[];
+    perNodePatches?: PerNodePatches;
 };
 
 export interface WorkerTalosArgs {
     config: CustomGetConfigurationOutputArgs;
     nodes: pulumi.Input<string>[];
+    perNodePatches?: PerNodePatches;
 };
 
 export interface BaseTalosArgs {
@@ -30,8 +57,12 @@ export interface BaseTalosArgs {
     worker?: WorkerTalosArgs;
 };
 
-export class Talos extends pulumi.ComponentResource {
+/* ---------------------------------------------------------------- */
+/* Component                                                        */
+/* ---------------------------------------------------------------- */
 
+export class Talos extends pulumi.ComponentResource {
+    /* outputs */
     secrets: talos.machine.Secrets;
     clientConfiguration: pulumi.Output<talos.client.GetConfigurationResult>;
 
@@ -40,19 +71,28 @@ export class Talos extends pulumi.ComponentResource {
     masterConfigurationApplyResources: talos.machine.ConfigurationApply[] = [];
     workerConfigurationApplyResources: talos.machine.ConfigurationApply[] = [];
 
-    constructor(name: string, args: BaseTalosArgs, opts?: pulumi.ComponentResourceOptions) {
+    constructor(
+        name: string, 
+        args: BaseTalosArgs, 
+        opts?: pulumi.ComponentResourceOptions
+    ) {
         super("okassov:talos", name, {}, opts);
 
+        /* secrets + client cfg */
         this.secrets = new talos.machine.Secrets(`secrets`, {}, { parent: this });
 
-        this.clientConfiguration = talos.client.getConfigurationOutput({
-            clusterName: args.sharedConfig.clusterName,
-            clientConfiguration: this.secrets.clientConfiguration,
-            endpoints: args.master.nodes
-        });
+        this.clientConfiguration = talos.client.getConfigurationOutput(
+            {
+                clusterName: args.sharedConfig.clusterName,
+                clientConfiguration: this.secrets.clientConfiguration,
+                endpoints: args.master.nodes
+            },
+            { parent: this }
+        );
 
         this.masterNodes = args.master.nodes
 
+        /* -------- common control‑plane configuration -------------- */
         const masterConfig = this.getConfigOutput(
             {
                 ...args.sharedConfig, 
@@ -66,18 +106,31 @@ export class Talos extends pulumi.ComponentResource {
             opts?.provider
         );
 
+        /* -------- per‑master apply -------------------------------- */
         args.master.nodes.forEach((node) => {
+            const nodeKey = node as unknown as string; // assume static string
+            const nodeSpecific =
+                args.master.perNodePatches?.[nodeKey] ?? [];
 
-            const masterConfigApply = new talos.machine.ConfigurationApply(`configApplyMaster-${node}`, {
-                clientConfiguration: this.secrets.clientConfiguration,
-                machineConfigurationInput: masterConfig.machineConfiguration,
-                node: node,
-                configPatches: args.master.config.patches
-            }, { parent: this });
+            const configPatches = [
+                ...args.master.config.patches,
+                ...nodeSpecific,
+            ];
+
+            const masterConfigApply = new talos.machine.ConfigurationApply(
+                `configApplyMaster-${nodeKey}`, 
+                {
+                    clientConfiguration: this.secrets.clientConfiguration,
+                    machineConfigurationInput: masterConfig.machineConfiguration,
+                    node: node,
+                    configPatches: args.master.config.patches
+                }, 
+                { parent: this }
+            );
             this.masterConfigurationApplyResources.push(masterConfigApply);
-
         });
 
+        /* -------- workers ---------------------------------------- */
         if (args.worker) {
             const workerConfig = this.getConfigOutput(
                 {
@@ -93,50 +146,64 @@ export class Talos extends pulumi.ComponentResource {
             );
 
             args.worker.nodes.forEach((node) => {
-                const workerConfigApply = new talos.machine.ConfigurationApply(`configApplyWorker-${node}`, {
-                    clientConfiguration: this.secrets.clientConfiguration,
-                    machineConfigurationInput: workerConfig.machineConfiguration,
-                    node: node,
-                    configPatches: args.worker?.config.patches
-                }, { parent: this })
+                const nodeKey = node as unknown as string;
+                const nodeSpecific =
+                    args.worker?.perNodePatches?.[nodeKey] ?? [];
+
+                const configPatches = [
+                    ...args.worker!.config.patches,
+                    ...nodeSpecific,
+                ];
+
+                const workerConfigApply = new talos.machine.ConfigurationApply(
+                    `configApplyWorker-${nodeKey}`, 
+                    {
+                        clientConfiguration: this.secrets.clientConfiguration,
+                        machineConfigurationInput: workerConfig.machineConfiguration,
+                        node: node,
+                        configPatches: args.worker?.config.patches
+                    }, 
+                    { parent: this }
+                );
                 this.workerConfigurationApplyResources.push(workerConfigApply);
             });
         }
 
-        new talos.machine.Bootstrap(`bootstrap`, {
-            node: args.master.nodes[0],
-            endpoint: args.master.nodes[0],
-            clientConfiguration: this.secrets.clientConfiguration,
-            timeouts: {
-                create: args.sharedConfig.boostrapTimeout
-            }
-        }, { dependsOn: this.masterConfigurationApplyResources , parent: this });
-
+        /* -------- bootstrap -------------------------------------- */
+        new talos.machine.Bootstrap(
+            `bootstrap`, 
+            {
+                node: args.master.nodes[0],
+                endpoint: args.master.nodes[0],
+                clientConfiguration: this.secrets.clientConfiguration,
+                timeouts: {
+                    create: args.sharedConfig.boostrapTimeout
+                }
+            }, 
+            { dependsOn: this.masterConfigurationApplyResources , parent: this }
+        );
     }
 
-    /**
-     * 
-     * @param args
-     * @param provider 
-     * @returns 
-     */
-    private getConfigOutput(args: talos.machine.GetConfigurationOutputArgs,
-        provider: pulumi.ProviderResource | undefined): pulumi.Output<talos.machine.GetConfigurationResult> {
-        
+    /* helper: wrap getConfigurationOutput */
+    private getConfigOutput(
+        args: talos.machine.GetConfigurationOutputArgs,
+        provider: pulumi.ProviderResource | undefined
+    ): pulumi.Output<talos.machine.GetConfigurationResult> {
         return talos.machine.getConfigurationOutput(args, { parent: this });
-    };
+    }
 
-
-    /**
-     * Outputs
-     */
+    /* outputs */
     public talosconfig(): pulumi.Output<string> {
         return this.clientConfiguration.talosConfig;
     };
 
     public kubeconfig(): pulumi.Output<talos.cluster.GetKubeconfigResult>{
-        return talos.cluster.getKubeconfigOutput({
-            clientConfiguration: this.secrets.clientConfiguration,
-            node: this.masterNodes[0]}, { parent: this });
+        return talos.cluster.getKubeconfigOutput(
+            {
+                clientConfiguration: this.secrets.clientConfiguration,
+                node: this.masterNodes[0]
+            }, 
+            { parent: this }
+        );
     };
 }

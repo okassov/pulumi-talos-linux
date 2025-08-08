@@ -118,13 +118,13 @@ export class Talos extends pulumi.ComponentResource {
             ];
 
             const masterConfigApply = new talos.machine.ConfigurationApply(
-                `configApplyMaster-${nodeKey}`, 
+                `configApplyMaster-${nodeKey}`,
                 {
                     clientConfiguration: this.secrets.clientConfiguration,
                     machineConfigurationInput: masterConfig.machineConfiguration,
                     node: node,
-                    configPatches: args.master.config.patches
-                }, 
+                    configPatches: configPatches,
+                },
                 { parent: this }
             );
             this.masterConfigurationApplyResources.push(masterConfigApply);
@@ -156,13 +156,13 @@ export class Talos extends pulumi.ComponentResource {
                 ];
 
                 const workerConfigApply = new talos.machine.ConfigurationApply(
-                    `configApplyWorker-${nodeKey}`, 
+                    `configApplyWorker-${nodeKey}`,
                     {
                         clientConfiguration: this.secrets.clientConfiguration,
                         machineConfigurationInput: workerConfig.machineConfiguration,
                         node: node,
-                        configPatches: args.worker?.config.patches
-                    }, 
+                        configPatches: configPatches,
+                    },
                     { parent: this }
                 );
                 this.workerConfigurationApplyResources.push(workerConfigApply);
@@ -189,7 +189,10 @@ export class Talos extends pulumi.ComponentResource {
         args: talos.machine.GetConfigurationOutputArgs,
         provider: pulumi.ProviderResource | undefined
     ): pulumi.Output<talos.machine.GetConfigurationResult> {
-        return talos.machine.getConfigurationOutput(args, { parent: this });
+        return talos.machine.getConfigurationOutput(args, {
+            parent: this,
+            provider: provider,
+        });
     }
 
     /* outputs */
